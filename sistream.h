@@ -10,10 +10,60 @@
 #define SIOSTREAMMM
 
 #include <iostream>
+#include <string>
 #include <stdexcept>
 #include <cassert>
 #include <limits>
 #include <functional>
+
+/**
+ * @brief output_object
+ * @typedef type : give basic_string associated type. (std::string or std::wstring)
+ * @var object : give the output console object associated. (std::cout or std::wcout)
+ *
+ * Gives the type of basic_string associated (string/wstring) with template parameter and console output object (such as cout/wcout).
+ *
+ */
+template <typename T>
+struct output_object;
+template <>
+struct output_object<char>
+{
+    typedef typename std::string type;
+    std::ostream& object = std::cout;
+};
+template <>
+struct output_object<wchar_t>
+{
+    typedef typename std::wstring type;
+    std::wostream& object = std::wcout;
+};
+
+/**
+ * @brief error_message
+ *
+ * Return the default error message.
+ *
+ */
+template <typename CharT>
+typename output_object<CharT>::type error_message() {}
+template <>
+typename output_object<char>::type error_message<char>() {return "Please enter a correct value.";}
+template <>
+typename output_object<wchar_t>::type error_message<wchar_t>() {return L"Please enter a correct value.";}
+
+/**
+ * @brief default_failure
+ *
+ * Default on_failure function.
+ *
+ */
+template <typename CharT>
+struct default_failure
+{
+    void operator()(typename output_object<CharT>::type const&) const {}
+};
+
 
 
 /**
@@ -24,11 +74,13 @@
  * It was made to be as easy to use as possible.
  */
 template <class CharT, class Func, class Traits = std::char_traits<CharT>>
-class sistream
+class basic_sistream
 {
 public:
     //type alias
     typedef std::basic_istream<CharT, Traits> istream_type;
+    typedef typename output_object<CharT>::type string_type;
+    typedef std::basic_ostream<CharT, Traits> ostream_type;
 
     /**
      * @brief constructor
@@ -39,7 +91,7 @@ public:
      * @pre "is" has to be a console stream such as cin, else it leads to an undefined behaviour. "error_message" can't be empty.
      *
      */
-    sistream(istream_type& is, std::string const& error_message = "Please enter a correct value.", Func && on_failure = [](std::string const&){}) : m_is(is), m_on_failure_msg(error_message), m_on_failure(on_failure)
+    basic_sistream(istream_type& is, string_type const& error_message = error_message<CharT>(), Func && on_failure = default_failure<CharT>{}) : m_is(is), m_on_failure_msg(error_message), m_on_failure(on_failure)
     {
         assert(!error_message.empty() && "Error in sistream ctor : \"error_message\" is empty");
     }
@@ -61,7 +113,7 @@ public:
      * Same behaviour as operator>>(istream&, ...) but guarantee than at end of func, user_var will be in a right state.
      */
     template <typename Input_Type>
-    sistream& operator>>(Input_Type& user_var)
+    basic_sistream& operator>>(Input_Type& user_var)
     {
         while (!(m_is >> user_var))
         {
@@ -76,7 +128,7 @@ public:
             else //bad user's input
             {
                 //backup the bad user's input
-                std::string bad_input;
+                string_type bad_input;
                 std::getline(m_is, bad_input);
                 m_on_failure(bad_input);
 
@@ -84,7 +136,7 @@ public:
                 m_is.clear();
                 m_is.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
-                std::cout << m_on_failure_msg << std::endl;
+                output_object<CharT>::object << m_on_failure_msg << std::endl;
             }
         }
         return *this;
@@ -105,7 +157,7 @@ public:
      * Same behaviour as operator>>(istream&, ...) but guarantee than at end of func, user_var will be in a right state AND not out of specified bound.
      */
     template <typename Arithmetic_Type, typename Comparator>
-    sistream& bound_input(Arithmetic_Type& user_var, Arithmetic_Type min_delimiter = std::numeric_limits<Arithmetic_Type>::min(), Arithmetic_Type max_delimiter = std::numeric_limits<Arithmetic_Type>::max(), std::string const& oob_message = "", Comparator comp = std::less<Arithmetic_Type>())
+    basic_sistream& bound_input(Arithmetic_Type& user_var, Arithmetic_Type min_delimiter = std::numeric_limits<Arithmetic_Type>::min(), Arithmetic_Type max_delimiter = std::numeric_limits<Arithmetic_Type>::max(), string_type const& oob_message = L"", Comparator comp = std::less<Arithmetic_Type>())
     {
         static_assert(std::is_arithmetic<Arithmetic_Type>::value, "Error in sistream operator<< with Arithmetic_Type which is not arithmetic.");
         while (!(m_is >> user_var) || comp(user_var, min_delimiter) || comp(max_delimiter, user_var))
@@ -121,7 +173,7 @@ public:
             else if (m_is.fail()) //unable to cast user's input
             {
                 //backup the bad user's input
-                std::string bad_input;
+                string_type bad_input;
                 std::getline(m_is, bad_input);
                 m_on_failure(bad_input);
 
@@ -129,26 +181,52 @@ public:
                 m_is.clear();
                 m_is.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
-                std::cout << m_on_failure_msg << std::endl;
+                output_object<CharT>::object << m_on_failure_msg << std::endl;
             }
             else //OOB
             {
-                std::cout << (oob_message == "" ? m_on_failure_msg : oob_message) << std::endl;
+                output_object<CharT>::object << (oob_message == "" ? m_on_failure_msg : oob_message) << std::endl;
             }
         }
         return *this;
     }
 
+    /**
+     * @brief default move constructor
+     */
+    basic_sistream(basic_sistream && other) = default;
+
+    basic_sistream& operator=(basic_sistream && other) = default;
+
 private:
-    sistream(sistream const& other) = delete;
-    sistream& operator=(sistream const& other) = delete;
-    sistream(sistream && other) = delete;
-    sistream& operator=(sistream && other) = delete;
+    basic_sistream(basic_sistream const& other) = delete;
+    basic_sistream& operator=(basic_sistream const& other) = delete;
 
     istream_type& m_is;
-    std::string m_on_failure_msg;
+    string_type m_on_failure_msg;
     Func m_on_failure;
 };
 
-#endif // SIOSTREAMMM
+// typedef(s) :
 
+typedef basic_sistream<char, std::function<void(output_object<char>::type)>, std::char_traits<char>> sistream;
+typedef basic_sistream<wchar_t, std::function<void(output_object<wchar_t>::type)>, std::char_traits<wchar_t>> wsistream;
+template <typename Func> using custom_sistream =  basic_sistream<char, Func, std::char_traits<char>>;
+template <typename Func> using custom_wsistream =  basic_sistream<wchar_t, Func, std::char_traits<wchar_t>>;
+
+/**
+ * @brief scin global variable
+ *
+ * Equivalent of cin.
+ */
+auto scin = sistream(std::cin);
+
+/**
+ * @brief swcin global variable
+ *
+ * Equivalent of wcin.
+ */
+auto swcin = wsistream(std::wcin);
+
+
+#endif // SIOSTREAMMM
