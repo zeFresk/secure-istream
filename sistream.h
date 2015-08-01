@@ -23,12 +23,12 @@
  * High level version of istream which provide strong garantee and force user to enter a correct input.
  * It was made to be as easy to use as possible.
  */
-template <class CharT, class Func>
+template <class CharT, class Func, class Traits = std::char_traits<CharT>>
 class sistream
 {
 public:
     //type alias
-    typedef std::basic_istream<CharT> istream_type;
+    typedef std::basic_istream<CharT, Traits> istream_type;
 
     /**
      * @brief constructor
