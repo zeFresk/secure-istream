@@ -1,14 +1,10 @@
 #include <iostream>
-#include "siostream.h"
-
-sistream scin(std::cout, "Erreur de saisie, retapez.");
+#include <sistream.h>
 
 int main()
 {
-    std::cout << "Entrez un nom :" << std::endl;
-    std::string nom;
-    scin >> nom;
-    std::cout << nom << std::endl;
+    sistream scin(std::cin);
+    std::cout << "Hello world." << std::endl;
     return 0;
 }
 
