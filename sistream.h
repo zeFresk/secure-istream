@@ -23,7 +23,7 @@
  * High level version of istream which provide strong garantee and force user to enter a correct input.
  * It was made to be as easy to use as possible.
  */
-template <class CharT, class Func = std::function<void(std::string const&)>>
+template <class CharT, class Func>
 class sistream
 {
 public:
@@ -140,6 +140,11 @@ public:
     }
 
 private:
+    sistream(sistream const& other) = delete;
+    sistream& operator=(sistream const& other) = delete;
+    sistream(sistream && other) = delete;
+    sistream& operator=(sistream && other) = delete;
+
     istream_type& m_is;
     std::string m_on_failure_msg;
     Func m_on_failure;
