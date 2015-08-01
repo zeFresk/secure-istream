@@ -23,12 +23,12 @@
  * High level version of istream which provide strong garantee and force user to enter a correct input.
  * It was made to be as easy to use as possible.
  */
-template <class CharT, class Traits, class Func = std::function<void(std::string const&)>>
+template <class CharT, class Func = std::function<void(std::string const&)>>
 class sistream
 {
 public:
     //type alias
-    typedef std::basic_istream<CharT, Traits> istream_type;
+    typedef std::basic_istream<CharT> istream_type;
 
     /**
      * @brief constructor
@@ -39,7 +39,7 @@ public:
      * @pre "is" has to be a console stream such as cin, else it leads to an undefined behaviour. "error_message" can't be empty.
      *
      */
-    sistream(istream_type& is, std::string error_message = "Please enter a correct value.", Func on_failure = [](std::string const&){}) : m_is(is), m_on_failure_msg(error_message), m_on_failure(on_failure)
+    sistream(istream_type& is, std::string const& error_message = "Please enter a correct value.", Func && on_failure = [](std::string const&){}) : m_is(is), m_on_failure_msg(error_message), m_on_failure(on_failure)
     {
         assert(!error_message.empty() && "Error in sistream ctor : \"error_message\" is empty");
     }
@@ -105,7 +105,7 @@ public:
      * Same behaviour as operator>>(istream&, ...) but guarantee than at end of func, user_var will be in a right state AND not out of specified bound.
      */
     template <typename Arithmetic_Type, typename Comparator>
-    sistream& bound_input(Arithmetic_Type& user_var, Arithmetic_Type min_delimiter = std::numeric_limits<Arithmetic_Type>::min(), Arithmetic_Type max_delimiter = std::numeric_limits<Arithmetic_Type>::max(), std::string const& oob_message = "", Comparator comp = std::less<Arithmetic_Type>)
+    sistream& bound_input(Arithmetic_Type& user_var, Arithmetic_Type min_delimiter = std::numeric_limits<Arithmetic_Type>::min(), Arithmetic_Type max_delimiter = std::numeric_limits<Arithmetic_Type>::max(), std::string const& oob_message = "", Comparator comp = std::less<Arithmetic_Type>())
     {
         static_assert(std::is_arithmetic<Arithmetic_Type>::value, "Error in sistream operator<< with Arithmetic_Type which is not arithmetic.");
         while (!(m_is >> user_var) || comp(user_var, min_delimiter) || comp(max_delimiter, user_var))
