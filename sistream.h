@@ -80,6 +80,20 @@ constexpr auto make_array(Args&&... values) -> std::array<typename std::common_t
     return {std::forward<Args>(values)...}; //double "{" to ensure initalizer-list.
 }
 
+template <typename Stream, typename Input_Type>
+bool nothrowoperator(Stream& is, Input_Type& user_input) noexcept
+{
+    try
+    {
+        is >> user_input;
+        return true;
+    }
+    catch (std::exception&)
+    {
+        return false;
+    }
+}
+
 
 
 /**
@@ -133,7 +147,7 @@ public:
     basic_sistream& operator>>(Input_Type& user_var)
     {
 
-        while (!(m_is >> user_var))
+        while (!nothrowoperator(m_is, user_var))
         {
             if (m_is.eof()) //End-Of-File
             {
