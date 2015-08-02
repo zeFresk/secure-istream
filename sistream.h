@@ -15,6 +15,8 @@
 #include <cassert>
 #include <limits>
 #include <functional>
+#include <array>
+#include <type_traits>
 
 /**
  * @brief output_object
@@ -64,6 +66,20 @@ struct default_failure
     void operator()(typename output_object<CharT>::type const&) const {}
 };
 
+/**
+ * @brief make_array
+ * @param[in] ...values : set of values to put in a std::array
+ *
+ * @pre all values as to be convertible to an unique type.
+ *
+ * @return an std::array filled with values.
+ */
+template <typename... Args>
+constexpr auto make_array(Args&&... values) -> std::array<typename std::common_type<Args...>::type, sizeof...(values)> //tricky way to std::array
+{
+    return {std::forward<Args>(values)...}; //double "{" to ensure initalizer-list.
+}
+
 
 
 /**
@@ -111,19 +127,21 @@ public:
      * @return sis
      *
      * Same behaviour as operator>>(istream&, ...) but guarantee than at end of func, user_var will be in a right state.
+     *
      */
     template <typename Input_Type>
     basic_sistream& operator>>(Input_Type& user_var)
     {
+
         while (!(m_is >> user_var))
         {
             if (m_is.eof()) //End-Of-File
             {
-                throw std::runtime_error("Error in operator>>(sistream&...) : EOF.");
+                throw std::ios_base::failure("Error in operator>>(sistream&...) : EOF.");
             }
             else if (m_is.bad()) //Bad bit
             {
-                throw std::runtime_error("Error in operatro>>(sistream&...) : Bad bit.");
+                throw std::ios_base::failure("Error in operatro>>(sistream&...) : Bad bit.");
             }
             else //bad user's input
             {
@@ -157,38 +175,101 @@ public:
      * Same behaviour as operator>>(istream&, ...) but guarantee than at end of func, user_var will be in a right state AND not out of specified bound.
      */
     template <typename Arithmetic_Type, typename Comparator>
-    basic_sistream& bound_input(Arithmetic_Type& user_var, Arithmetic_Type min_delimiter = std::numeric_limits<Arithmetic_Type>::min(), Arithmetic_Type max_delimiter = std::numeric_limits<Arithmetic_Type>::max(), string_type const& oob_message = L"", Comparator comp = std::less<Arithmetic_Type>())
+    basic_sistream& bound_input(Arithmetic_Type& user_var, Arithmetic_Type min_delimiter = std::numeric_limits<Arithmetic_Type>::min(), Arithmetic_Type max_delimiter = std::numeric_limits<Arithmetic_Type>::max(), string_type const& oob_message = "", Comparator && comp = std::less<Arithmetic_Type>())
     {
         static_assert(std::is_arithmetic<Arithmetic_Type>::value, "Error in sistream operator<< with Arithmetic_Type which is not arithmetic.");
-        while (!(m_is >> user_var) || comp(user_var, min_delimiter) || comp(max_delimiter, user_var))
+        do
         {
-            if (m_is.eof()) //End-Of-File
-            {
-                throw std::runtime_error("Error in operator>>(sistream&...) : EOF.");
-            }
-            else if (m_is.bad()) //Bad bit
-            {
-                throw std::runtime_error("Error in operatro>>(sistream&...) : Bad bit.");
-            }
-            else if (m_is.fail()) //unable to cast user's input
-            {
-                //backup the bad user's input
-                string_type bad_input;
-                std::getline(m_is, bad_input);
-                m_on_failure(bad_input);
-
-                //put m_is on a good state
-                m_is.clear();
-                m_is.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-
-                output_object<CharT>::object << m_on_failure_msg << std::endl;
-            }
-            else //OOB
-            {
+            *this >> user_var;
+            if (comp(user_var, min_delimiter) || comp(max_delimiter, user_var))
                 output_object<CharT>::object << (oob_message == "" ? m_on_failure_msg : oob_message) << std::endl;
-            }
-        }
+        } while (comp(user_var, min_delimiter) || comp(max_delimiter, user_var));
         return *this;
+    }
+
+    /**
+     * @brief predicate_input
+     * @param[out] user_var : variable which is going to contains user's good input.
+     * @param[in] pred : any callable object which returns bool and can take one argument convertible to Input_Type&&. It has to return true if the value is considered as an acceptable value.
+     *
+     * @pre : Predicate as to be an unary predicat which returns a bool value.
+     *
+     * Input function which force the user to enter a value which match with a predicate.
+     *
+     */
+    template <typename Input_Type, typename Predicate>
+    basic_sistream& predicate_input(Input_Type& user_var, Predicate && pred)
+    {
+        static_assert(std::is_convertible<Predicate, std::function<bool(Input_Type&&)>>::value, "Error in sistream predicate : Predicate is not convertible to std::function<bool(Input_Type)>.");
+        do
+        {
+            *this >> user_var;
+        } while (!pred(user_var));
+        return *this;
+    }
+
+    /**
+     * @brief any_of_container
+     * @param[out] user_var : variable which is going to contains user's good input.
+     * @param[in] first : first iterator of a sequence.
+     * @param[in] last : last iterator of a sequence.
+     *
+     * Input function which force user to enter a value within a container.
+     *
+     */
+    template <typename Input_Type, typename Iterator>
+    basic_sistream& any_of_container(Input_Type& user_var, Iterator first, Iterator last)
+    {
+        return predicate_input(user_var, [&](Input_Type& val){return (std::find(first, last, val) != last);});
+    }
+
+    /**
+     * @brief any_of
+     * @param[out] user_var : variable which is going to contains user's good input.
+     * @param[in] args : set of values which contains every possible "good" values.
+     *
+     * @pre set of value has to be convertible to an unique type.
+     *
+     * Input function which force user to enter a value within a set of values. Same as any_of_container but with variadic template.
+     *
+     */
+    template <typename Input_Type, typename... Args>
+    basic_sistream& any_of(Input_Type& user_var, Args&&... args)
+    {
+        auto array = make_array(args...);
+        return any_of_container(user_var, std::begin(array), std::end(array));
+    }
+
+    /**
+     * @brief none_of_container
+     * @param[out] user_var : variable which is going to contains user's good input.
+     * @param[in] first : first iterator of a sequence.
+     * @param[in] last : last iterator of a sequence.
+     *
+     * Input function which force user to enter a value which is not inside a container.
+     *
+     */
+    template <typename Input_Type, typename Iterator>
+    basic_sistream& none_of_container(Input_Type& user_var, Iterator first, Iterator last)
+    {
+        return predicate_input(user_var, [&](Input_Type& val){return (std::find(first, last, val) == last);});
+    }
+
+    /**
+     * @brief none_of
+     * @param[out] user_var : variable which is going to contains user's good input.
+     * @param[in] args : set of values which contains every possible "bad" values.
+     *
+     * @pre set of value has to be convertible to an unique type.
+     *
+     * Input function which force user to enter a value which is not inside a set of values. Same as none_of_container but with variadic template.
+     *
+     */
+    template <typename Input_Type, typename... Args>
+    basic_sistream& none_of(Input_Type& user_var, Args&&... args)
+    {
+        auto array = make_array(args...);
+        return none_of_container(user_var, std::begin(array), std::end(array));
     }
 
     /**
@@ -218,15 +299,17 @@ template <typename Func> using custom_wsistream =  basic_sistream<wchar_t, Func,
  * @brief scin global variable
  *
  * Equivalent of cin.
+ *
  */
-auto scin = sistream(std::cin);
+extern sistream scin;
 
 /**
  * @brief swcin global variable
  *
  * Equivalent of wcin.
+ *
  */
-auto swcin = wsistream(std::wcin);
+extern wsistream swcin;
 
 
 #endif // SIOSTREAMMM

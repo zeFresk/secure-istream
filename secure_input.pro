@@ -4,7 +4,8 @@ CONFIG -= app_bundle
 CONFIG -= qt
 CONFIG += c++14
 
-SOURCES += main.cpp
+SOURCES += main.cpp \
+    sistream.cpp
 
 include(deployment.pri)
 qtcAddDeployment()
