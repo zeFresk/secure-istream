@@ -9,6 +9,14 @@
 #ifndef SIOSTREAMMM
 #define SIOSTREAMMM
 
+/**
+ * @brief ASSERT_ON_FAILBIT_FLAG
+ *
+ * Uncomment if you want an assertion if failbit may throw an exception.
+ *
+ */
+//#define ASSERT_ON_FAILBIT_FLAG
+
 #include <iostream>
 #include <string>
 #include <stdexcept>
@@ -110,7 +118,9 @@ public:
     basic_sistream(istream_type& is, string_type const& error_message = error_message<CharT>(), Func && on_failure = default_failure<CharT>{}) : m_is(is), m_on_failure_msg(error_message), m_on_failure(on_failure)
     {
         assert(!error_message.empty() && "Error in sistream ctor : \"error_message\" is empty");
-        assert(m_is.exceptions() != std::ios_base::goodbit && "Error in sistream ctor : exception mask is enabled.");
+        #ifdef ASSERT_ON_FAILBIT_FLAG
+        assert(((m_is.exceptions() & std::ios_base::failbit) == std::ios_base::failbit) && "Error in sistream ctor : exception mask is enabled.");
+        #endif
     }
 
     /**
@@ -133,7 +143,9 @@ public:
     template <typename Input_Type>
     basic_sistream& operator>>(Input_Type& user_var)
     {
-        assert(m_is.exceptions() != std::ios_base::goodbit && "Error in sistream operator>> : exception mask is enabled.");
+        #ifdef ASSERT_ON_FAILBIT_FLAG
+        assert(((m_is.exceptions() & std::ios_base::failbit) == std::ios_base::failbit) && "Error in sistream operator>> : exception mask is enabled.");
+        #endif
         while (!(m_is >> user_var))
         {
             if (m_is.eof()) //End-Of-File
