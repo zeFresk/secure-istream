@@ -30,14 +30,14 @@ And that's all ! Didn't I say "easy to use" ? :D
 
 It's even easier to use than to install. If you don't need an advanced error management or a user defined error message then remplace
 
-```c_cpp
+```cpp
 cin >> somevar;
 wcin >> othervar;
 ```
 
 by
 
-```c_cpp
+```cpp
 scin >> somevar;
 swcin >> othervar;
 ```
@@ -46,7 +46,7 @@ swcin >> othervar;
 
 If you want a custom error message just make your own sistream or wsistream by doing :
 
-```c_cpp
+```cpp
 /*w*/sistream my_secure_input(/*a input stream*/ std::/*w*/cin, "My error message");
 ```
 
