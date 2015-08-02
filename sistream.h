@@ -104,12 +104,13 @@ public:
      * @param[in] error_message : text which is going to be outputted if the user's input isn't valid. (std::cout)
      * @param[in] on_failure : Func to call on user's bad input. Can take ONLY ONE parameter which has to be a std::string which whill contains user input. Return of on_failure will be ignored. Func can be any callable thing.
      *
-     * @pre "is" has to be a console stream such as cin, else it leads to an undefined behaviour. "error_message" can't be empty.
+     * @pre "is" has to be a console stream such as cin, else it leads to an undefined behaviour. "error_message" can't be empty. /!\ Exception has to be disabled /!\
      *
      */
     basic_sistream(istream_type& is, string_type const& error_message = error_message<CharT>(), Func && on_failure = default_failure<CharT>{}) : m_is(is), m_on_failure_msg(error_message), m_on_failure(on_failure)
     {
         assert(!error_message.empty() && "Error in sistream ctor : \"error_message\" is empty");
+        assert(m_is.exceptions() != std::ios_base::goodbit && "Error in sistream ctor : exception mask is enabled.");
     }
 
     /**
@@ -122,7 +123,7 @@ public:
      * @brief operator >>
      * @param[out] user_var : variable which is going to contains user's good input.
      *
-     * @pre user_var has to implement an operator>>(istream&, var_type).
+     * @pre user_var has to implement an operator>>(istream&, var_type). And iostate has to be default's mask.
      *
      * @return sis
      *
@@ -132,7 +133,7 @@ public:
     template <typename Input_Type>
     basic_sistream& operator>>(Input_Type& user_var)
     {
-
+        assert(m_is.exceptions() != std::ios_base::goodbit && "Error in sistream operator>> : exception mask is enabled.");
         while (!(m_is >> user_var))
         {
             if (m_is.eof()) //End-Of-File
