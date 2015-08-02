@@ -30,29 +30,29 @@ And that's all ! Didn't I say "easy to use" ? :D
 
 It's even easier to use than to install. If you don't need an advanced error management or a user defined error message then remplace
 
-'''c_cpp
+```c_cpp
 cin >> somevar;
 wcin >> othervar;
-'''
+```
 
 by
 
-'''c_cpp
+```c_cpp
 scin >> somevar;
 swcin >> othervar;
-'''
+```
 
 > Wow, much difficulty, such modifications !
 
 If you want a custom error message just make your own sistream or wsistream by doing :
 
-'''
+```c_cpp
 /*w*/sistream my_secure_input(/*a input stream*/ std::/*w*/cin, "My error message");
-'''
+```
 
-And if you want to use a custom callback which will do something with the user's bad input then simply add a third parameter (convertible to '''std::function<void(string_type)>''')
+And if you want to use a custom callback which will do something with the user's bad input then simply add a third parameter (convertible to `std::function<void(string_type)>`)
 
-If you don't want to pay the cost of a '''std::function''' you can also use the '''custom_/*w*/sistream''' type.
+If you don't want to pay the cost of a `std::function` you can also use the `custom_/*w*/sistream` type.
 
 And if you know what you are doing you can even use the raw basic_sistream class.
 
