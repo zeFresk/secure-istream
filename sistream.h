@@ -107,6 +107,14 @@ std::basic_istream<CharT, Traits>& operator_with_save(std::basic_istream<CharT, 
     return (stream >> input);
 }
 
+/**
+ * @brief to_best_string
+ * @param[in] value : value to convert into a basic_string.
+ * @return an std::string or std::wstring given template parameter is returned.
+ *
+ * Fusion of std::to_string and std::to_wstring.
+ *
+ */
 template <typename CharT, typename Traits, typename Type>
 typename output_object<CharT>::type to_best_string(Type const& value)
 {
