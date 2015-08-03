@@ -18,6 +18,7 @@
 //#define ASSERT_ON_FAILBIT_FLAG
 
 #include <iostream>
+#include <algorithm>
 #include <string>
 #include <stdexcept>
 #include <cassert>
@@ -25,6 +26,7 @@
 #include <functional>
 #include <array>
 #include <type_traits>
+#include <sstream>
 
 /**
  * @brief output_object
@@ -40,13 +42,13 @@ template <>
 struct output_object<char>
 {
     typedef typename std::string type;
-    std::ostream& object = std::cout;
+    static std::ostream& object;
 };
 template <>
 struct output_object<wchar_t>
 {
     typedef typename std::wstring type;
-    std::wostream& object = std::wcout;
+    static std::wostream& object;
 };
 
 /**
@@ -56,11 +58,11 @@ struct output_object<wchar_t>
  *
  */
 template <typename CharT>
-typename output_object<CharT>::type error_message() {}
+inline typename output_object<CharT>::type error_message() {}
 template <>
-typename output_object<char>::type error_message<char>() {return "Please enter a correct value.";}
+inline typename output_object<char>::type error_message<char>() {return "Please enter a correct value.";}
 template <>
-typename output_object<wchar_t>::type error_message<wchar_t>() {return L"Please enter a correct value.";}
+inline typename output_object<wchar_t>::type error_message<wchar_t>() {return L"Please enter a correct value.";}
 
 /**
  * @brief default_failure
@@ -88,6 +90,32 @@ constexpr auto make_array(Args&&... values) -> std::array<typename std::common_t
     return {std::forward<Args>(values)...}; //double "{" to ensure initalizer-list.
 }
 
+/**
+ * @brief operator_with_save
+ * @param[in] is : we will extract data from here.
+ * @param[out] input : variable which will stock user input if it succeed.
+ * @param[out] str : last input.
+ *
+ * Same as istream& operator>> but the last input will be saved as a string in third parameter.
+ *
+ */
+template <typename CharT, typename Traits, typename Input_Type>
+std::basic_istream<CharT, Traits>& operator_with_save(std::basic_istream<CharT, Traits>& is, Input_Type& input, typename output_object<CharT>::type& str)
+{
+    is >> str;
+    std::basic_stringstream<CharT, Traits> stream(str);
+    return (stream >> input);
+}
+
+template <typename CharT, typename Traits, typename Type>
+typename output_object<CharT>::type to_best_string(Type const& value)
+{
+    std::basic_stringstream<CharT, Traits> stream;
+    stream << value;
+    return stream.str();
+}
+
+
 
 
 /**
@@ -97,7 +125,7 @@ constexpr auto make_array(Args&&... values) -> std::array<typename std::common_t
  * High level version of istream which provide strong garantee and force user to enter a correct input.
  * It was made to be as easy to use as possible.
  */
-template <class CharT, class Func, class Traits = std::char_traits<CharT>>
+template <typename CharT, typename Func, typename Traits = std::char_traits<CharT>>
 class basic_sistream
 {
 public:
@@ -146,7 +174,8 @@ public:
         #ifdef ASSERT_ON_FAILBIT_FLAG
         assert(((m_is.exceptions() & std::ios_base::failbit) == std::ios_base::failbit) && "Error in sistream operator>> : exception mask is enabled.");
         #endif
-        while (!(m_is >> user_var))
+        string_type last_input;
+        while (!operator_with_save(m_is, user_var, last_input))
         {
             if (m_is.eof()) //End-Of-File
             {
@@ -159,9 +188,7 @@ public:
             else //bad user's input
             {
                 //backup the bad user's input
-                string_type bad_input;
-                std::getline(m_is, bad_input);
-                m_on_failure(bad_input);
+                m_on_failure(last_input);
 
                 //put m_is on a good state
                 m_is.clear();
@@ -170,6 +197,7 @@ public:
                 output_object<CharT>::object << m_on_failure_msg << std::endl;
             }
         }
+        m_is.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); //avoid problem when two values separated by space are entered
         return *this;
     }
 
@@ -187,7 +215,7 @@ public:
      *
      * Same behaviour as operator>>(istream&, ...) but guarantee than at end of func, user_var will be in a right state AND not out of specified bound.
      */
-    template <typename Arithmetic_Type, typename Comparator>
+    template <typename Arithmetic_Type, typename Comparator = decltype(std::less<Arithmetic_Type>())>
     basic_sistream& bound_input(Arithmetic_Type& user_var, Arithmetic_Type min_delimiter = std::numeric_limits<Arithmetic_Type>::min(), Arithmetic_Type max_delimiter = std::numeric_limits<Arithmetic_Type>::max(), string_type const& oob_message = "", Comparator && comp = std::less<Arithmetic_Type>())
     {
         static_assert(std::is_arithmetic<Arithmetic_Type>::value, "Error in sistream operator<< with Arithmetic_Type which is not arithmetic.");
@@ -195,7 +223,10 @@ public:
         {
             *this >> user_var;
             if (comp(user_var, min_delimiter) || comp(max_delimiter, user_var))
+            {
                 output_object<CharT>::object << (oob_message == "" ? m_on_failure_msg : oob_message) << std::endl;
+                m_on_failure(to_best_string<CharT, Traits, Arithmetic_Type>(user_var));
+            }
         } while (comp(user_var, min_delimiter) || comp(max_delimiter, user_var));
         return *this;
     }
@@ -204,6 +235,7 @@ public:
      * @brief predicate_input
      * @param[out] user_var : variable which is going to contains user's good input.
      * @param[in] pred : any callable object which returns bool and can take one argument convertible to Input_Type&&. It has to return true if the value is considered as an acceptable value.
+     * @param[in] false_message : message to display if the value entered doesn't match predicate.
      *
      * @pre : Predicate as to be an unary predicat which returns a bool value.
      *
@@ -211,12 +243,17 @@ public:
      *
      */
     template <typename Input_Type, typename Predicate>
-    basic_sistream& predicate_input(Input_Type& user_var, Predicate && pred)
+    basic_sistream& predicate_input(Input_Type& user_var, Predicate && pred, string_type const& false_message = "")
     {
         static_assert(std::is_convertible<Predicate, std::function<bool(Input_Type&&)>>::value, "Error in sistream predicate : Predicate is not convertible to std::function<bool(Input_Type)>.");
         do
         {
             *this >> user_var;
+            if (!pred(user_var))
+            {
+                output_object<CharT>::object << (false_message == "" ? m_on_failure_msg : false_message) << std::endl;
+                m_on_failure(to_best_string<CharT, Traits, Input_Type>(user_var));
+            }
         } while (!pred(user_var));
         return *this;
     }
@@ -226,14 +263,15 @@ public:
      * @param[out] user_var : variable which is going to contains user's good input.
      * @param[in] first : first iterator of a sequence.
      * @param[in] last : last iterator of a sequence.
+     * @param[in] false_message : message to display if the value entered doesn't match a value in the sequence.
      *
      * Input function which force user to enter a value within a container.
      *
      */
     template <typename Input_Type, typename Iterator>
-    basic_sistream& any_of_container(Input_Type& user_var, Iterator first, Iterator last)
+    basic_sistream& any_of_container(Input_Type& user_var, Iterator first, Iterator last, string_type const& false_message = "")
     {
-        return predicate_input(user_var, [&](Input_Type& val){return (std::find(first, last, val) != last);});
+        return predicate_input(user_var, [&](Input_Type const& val) -> bool {return (std::find(first, last, val) != last);}, false_message);
     }
 
     /**
@@ -250,7 +288,7 @@ public:
     basic_sistream& any_of(Input_Type& user_var, Args&&... args)
     {
         auto array = make_array(args...);
-        return any_of_container(user_var, std::begin(array), std::end(array));
+        return any_of_container(user_var, std::begin(array), std::end(array), "Please enter a value which match sequence.");
     }
 
     /**
@@ -258,14 +296,15 @@ public:
      * @param[out] user_var : variable which is going to contains user's good input.
      * @param[in] first : first iterator of a sequence.
      * @param[in] last : last iterator of a sequence.
+     * @param[in] false_message : message to display if the value entered match a value in the sequence.
      *
      * Input function which force user to enter a value which is not inside a container.
      *
      */
     template <typename Input_Type, typename Iterator>
-    basic_sistream& none_of_container(Input_Type& user_var, Iterator first, Iterator last)
+    basic_sistream& none_of_container(Input_Type& user_var, Iterator first, Iterator last, string_type const& false_message = "")
     {
-        return predicate_input(user_var, [&](Input_Type& val){return (std::find(first, last, val) == last);});
+        return predicate_input(user_var, [&](Input_Type const& val) -> bool {return (std::find(first, last, val) == last);}, false_message);
     }
 
     /**
@@ -282,7 +321,7 @@ public:
     basic_sistream& none_of(Input_Type& user_var, Args&&... args)
     {
         auto array = make_array(args...);
-        return none_of_container(user_var, std::begin(array), std::end(array));
+        return none_of_container(user_var, std::begin(array), std::end(array), "Please enter a value which do not match sequence.");
     }
 
     /**
