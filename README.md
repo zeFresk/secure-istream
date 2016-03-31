@@ -3,7 +3,7 @@ Secure-istream
 
 ### What ?
 
-Here you can find a high-level and secure version of basic_stream (<iostream> header). It was made to be easy to use and to replace standard input streams.
+Here you can find a high-level and secure version of basic_stream (\<iostream\> header). It was made to be easy to use and to replace standard input streams.
 
 It is also very flexible (as much as standard basic_stream) and provides a secure version of cin and wcin.
 
